@@ -78,6 +78,14 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze
     callbacks.run('on_pretrain_routine_start')
 
+    YOLOV5__SAVE_WEIGHTS_DIRECTORY = os.environ.get("YOLOV5__SAVE_WEIGHTS_DIRECTORY")
+    if YOLOV5__SAVE_WEIGHTS_DIRECTORY is not None:
+        from pathy import Pathy
+        d_cloud = Pathy.fluid(YOLOV5__SAVE_WEIGHTS_DIRECTORY) / save_dir.name
+        w_cloud = d_cloud / 'weights'  # weights dir
+        last_cloud, best_cloud = w_cloud / 'last.pt', w_cloud / 'best.pt'
+        print(f"env YOLOV5__SAVE_WEIGHTS_DIRECTORY detected: save checkpoints also to {w_cloud}")
+
     # Directories
     w = save_dir / 'weights'  # weights dir
     (w.parent if evolve else w).mkdir(parents=True, exist_ok=True)  # make dir
@@ -395,6 +403,16 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                     torch.save(ckpt, best)
                 if opt.save_period > 0 and epoch % opt.save_period == 0:
                     torch.save(ckpt, w / f'epoch{epoch}.pt')
+                if YOLOV5__SAVE_WEIGHTS_DIRECTORY is not None:
+                    import fsspec
+                    with fsspec.open(str(last_cloud), "wb") as lastf:
+                        torch.save(ckpt, lastf)
+                    if best_fitness == fi:
+                        with fsspec.open(str(best_cloud), "wb") as bestf:
+                            torch.save(ckpt, bestf)
+                    if opt.save_period > 0 and epoch % opt.save_period == 0:
+                        with fsspec.open(str(w_cloud / f'epoch{epoch}.pt'), "wb") as outf:
+                            torch.save(ckpt, outf)
                 del ckpt
                 callbacks.run('on_model_save', last, epoch, final_epoch, best_fitness, fi)
 
